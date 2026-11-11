@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.env
+
+# generated demo data (recreate with scripts/make_samples.py)
+samples/
+labelled/
+
+# local caches / superseded files
+training/cache/
+artifacts/pipeline.joblib

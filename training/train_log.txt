@@ -1,0 +1,81 @@
+[     2s] clean v3 changed 792 of 994 texts
+[     2s] stage 1 (clean v2)...
+/home/jj/Project/Resumefit/.venv/lib/python3.12/site-packages/sklearn/linear_model/_logistic.py:451: OptimizeWarning: Unknown solver options: iprint
+  opt_res = optimize.minimize(
+/home/jj/Project/Resumefit/.venv/lib/python3.12/site-packages/sklearn/linear_model/_logistic.py:451: OptimizeWarning: Unknown solver options: iprint
+  opt_res = optimize.minimize(
+/home/jj/Project/Resumefit/.venv/lib/python3.12/site-packages/sklearn/linear_model/_logistic.py:451: OptimizeWarning: Unknown solver options: iprint
+  opt_res = optimize.minimize(
+/home/jj/Project/Resumefit/.venv/lib/python3.12/site-packages/sklearn/linear_model/_logistic.py:451: OptimizeWarning: Unknown solver options: iprint
+  opt_res = optimize.minimize(
+/home/jj/Project/Resumefit/.venv/lib/python3.12/site-packages/sklearn/linear_model/_logistic.py:451: OptimizeWarning: Unknown solver options: iprint
+  opt_res = optimize.minimize(
+/home/jj/Project/Resumefit/.venv/lib/python3.12/site-packages/sklearn/linear_model/_logistic.py:451: OptimizeWarning: Unknown solver options: iprint
+  opt_res = optimize.minimize(
+/home/jj/Project/Resumefit/.venv/lib/python3.12/site-packages/sklearn/linear_model/_logistic.py:451: OptimizeWarning: Unknown solver options: iprint
+  opt_res = optimize.minimize(
+/home/jj/Project/Resumefit/.venv/lib/python3.12/site-packages/sklearn/linear_model/_logistic.py:451: OptimizeWarning: Unknown solver options: iprint
+  opt_res = optimize.minimize(
+/home/jj/Project/Resumefit/.venv/lib/python3.12/site-packages/sklearn/linear_model/_logistic.py:451: OptimizeWarning: Unknown solver options: iprint
+  opt_res = optimize.minimize(
+/home/jj/Project/Resumefit/.venv/lib/python3.12/site-packages/sklearn/linear_model/_logistic.py:451: OptimizeWarning: Unknown solver options: iprint
+  opt_res = optimize.minimize(
+[    77s] stage 1 (clean v3)...
+[    98s] embedding 792 new texts with all-MiniLM-L6-v2 (CPU)...
+/home/jj/Project/Resumefit/.venv/lib/python3.12/site-packages/sklearn/linear_model/_logistic.py:451: OptimizeWarning: Unknown solver options: iprint
+  opt_res = optimize.minimize(
+/home/jj/Project/Resumefit/.venv/lib/python3.12/site-packages/sklearn/linear_model/_logistic.py:451: OptimizeWarning: Unknown solver options: iprint
+  opt_res = optimize.minimize(
+/home/jj/Project/Resumefit/.venv/lib/python3.12/site-packages/sklearn/linear_model/_logistic.py:451: OptimizeWarning: Unknown solver options: iprint
+  opt_res = optimize.minimize(
+/home/jj/Project/Resumefit/.venv/lib/python3.12/site-packages/sklearn/linear_model/_logistic.py:451: OptimizeWarning: Unknown solver options: iprint
+  opt_res = optimize.minimize(
+/home/jj/Project/Resumefit/.venv/lib/python3.12/site-packages/sklearn/linear_model/_logistic.py:451: OptimizeWarning: Unknown solver options: iprint
+  opt_res = optimize.minimize(
+/home/jj/Project/Resumefit/.venv/lib/python3.12/site-packages/sklearn/linear_model/_logistic.py:451: OptimizeWarning: Unknown solver options: iprint
+  opt_res = optimize.minimize(
+/home/jj/Project/Resumefit/.venv/lib/python3.12/site-packages/sklearn/linear_model/_logistic.py:451: OptimizeWarning: Unknown solver options: iprint
+  opt_res = optimize.minimize(
+/home/jj/Project/Resumefit/.venv/lib/python3.12/site-packages/sklearn/linear_model/_logistic.py:451: OptimizeWarning: Unknown solver options: iprint
+  opt_res = optimize.minimize(
+/home/jj/Project/Resumefit/.venv/lib/python3.12/site-packages/sklearn/linear_model/_logistic.py:451: OptimizeWarning: Unknown solver options: iprint
+  opt_res = optimize.minimize(
+/home/jj/Project/Resumefit/.venv/lib/python3.12/site-packages/sklearn/linear_model/_logistic.py:451: OptimizeWarning: Unknown solver options: iprint
+  opt_res = optimize.minimize(
+[   356s] v2 (Colab)     CV F1 0.520  CV NDCG 0.703 | test F1 0.550  NDCG 0.688
+[   399s] + cleaning     CV F1 0.523  CV NDCG 0.702 | test F1 0.553  NDCG 0.686
+[   421s] + skills       CV F1 0.521  CV NDCG 0.704 | test F1 0.558  NDCG 0.685
+[   452s] + experience   CV F1 0.537  CV NDCG 0.727 | test F1 0.601  NDCG 0.724
+[   452s] final features: + experience {'clean': 3, 'skills': 3, 'exp': 3}
+[   453s] Logistic Regression  CV F1 0.502 | test acc 0.566 F1 0.540
+[   453s] Naive Bayes          CV F1 0.487 | test acc 0.567 F1 0.534
+[   484s] SVM (RBF)            CV F1 0.523 | test acc 0.609 F1 0.550
+[   502s] Random Forest        CV F1 0.537 | test acc 0.637 F1 0.601
+[   507s] Gradient Boosting    CV F1 0.541 | test acc 0.606 F1 0.570
+[   543s] Neural Net (MLP)     CV F1 0.497 | test acc 0.560 F1 0.481
+[   549s] XGBoost              CV F1 0.528 | test acc 0.633 F1 0.571
+[   549s] classifier selected by CV: Gradient Boosting
+[   552s] CV NDCG@10 classifier 0.726 vs ranker 0.737 -> ranker | test NDCG classifier 0.724 ranker 0.726
+[   553s] CV macro-F1 argmax 0.541 vs thresholds 0.473 -> argmax
+[   554s] FINAL (official test split): {'Accuracy': 0.606, 'Precision': 0.575, 'Recall': 0.575, 'F1 (macro)': 0.57, 'ROC-AUC': np.float64(0.776), 'NDCG@10': 0.726, 'Top-3 hit': 0.673, 'Shortlist acc': 0.764, 'Shortlist AUROC': np.float64(0.869), 'CV macro-F1': 0.541, 'CV NDCG@10': 0.737}
+[[609 140 108]
+ [ 71 260 113]
+ [ 62 199 197]]
+ABLATION (Random Forest unless noted)
+                                 CV macro-F1  CV NDCG@10  Accuracy  F1 (macro)  ROC-AUC  NDCG@10  Top-3 hit  Shortlist AUROC
+v2 (Colab)                            0.520       0.703     0.585       0.550    0.757    0.688      0.607            0.809
++ cleaning                            0.523       0.702     0.585       0.553    0.762    0.686      0.607            0.813
++ skills                              0.521       0.704     0.592       0.558    0.764    0.685      0.597            0.812
++ experience                          0.537       0.727     0.637       0.601    0.805    0.724      0.654            0.865
++ ranking & thresholds (final)        0.541       0.737     0.606       0.570    0.776    0.726      0.673            0.869
+MODEL COMPARISON (final features)
+                      CV macro-F1  CV NDCG@10  Accuracy  Precision  Recall  F1 (macro)  ROC-AUC  NDCG@10  Top-3 hit  Shortlist acc  Shortlist AUROC
+model                                                                                                                                             
+Logistic Regression        0.502       0.683     0.566      0.553   0.548       0.540    0.749    0.683      0.602          0.702            0.803
+Naive Bayes                0.487       0.699     0.567      0.533   0.536       0.534    0.734    0.690      0.597          0.703            0.758
+SVM (RBF)                  0.523       0.713     0.609      0.562   0.553       0.550    0.785    0.698      0.645          0.773            0.850
+Random Forest              0.537       0.727     0.637      0.602   0.602       0.601    0.805    0.724      0.654          0.748            0.865
+Gradient Boosting          0.541       0.726     0.606      0.575   0.575       0.570    0.776    0.724      0.645          0.764            0.869
+Neural Net (MLP)           0.497       0.696     0.560      0.494   0.490       0.481    0.736    0.681      0.602          0.752            0.841
+XGBoost                    0.528       0.727     0.633      0.583   0.568       0.571    0.791    0.731      0.668          0.783            0.868
+[   555s] saved artifacts/pipeline_v3.joblib, embeddings_v3.joblib, ablation_v3.csv, model_comparison_v3.csv

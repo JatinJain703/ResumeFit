@@ -1,0 +1,21 @@
+# CPU-only torch keeps the install small:  pip install torch==2.15.0 --index-url https://download.pytorch.org/whl/cpu
+torch==2.15.0
+# Must match the version the model was pickled with in Colab
+scikit-learn==1.6.1
+numpy==2.2.6
+scipy==1.18.1
+pandas==3.1.1
+joblib==1.6.0
+pyarrow==26.0.1
+xgboost==3.4.1
+sentence-transformers==6.2.0
+transformers==5.22.1
+fastapi==0.162.0
+pydantic==2.14.3
+uvicorn[standard]==0.54.0
+python-multipart==0.0.33
+pypdf==6.21.4
+python-docx==1.2.0
+# tests
+pytest==9.2.0
+httpx==0.28.1
