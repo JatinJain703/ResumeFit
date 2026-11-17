@@ -75,6 +75,23 @@ def build_known_words(texts, min_count: int = 3) -> frozenset:
 
 # ============================================================== skills
 
+def with_cleaned_spellings(catalog: dict[str, list[str]], names, known_words=frozenset()) -> dict[str, list[str]]:
+    """Copy of `catalog` where each cased name ("PowerShell") also matches its cleaned spelling ("power shell").
+
+    Matching runs on cleaned text, and cleaning splits "PowerShell" into "Power Shell", so without this
+    correctly capitalised skills would silently go unmatched (or match a shorter alias, e.g. "GitHub" -> git).
+    """
+    owner = {a: c for c, al in catalog.items() for a in al}
+    out = {c: list(al) for c, al in catalog.items()}
+    for name in names:
+        joined = name.lower()
+        split = clean_v3(name, known_words).lower()
+        canon = owner.get(joined)
+        if canon is not None and split != joined and split not in owner:
+            out[canon].append(split)
+    return out
+
+
 class SkillMatcher:
     def __init__(self, version: int = 2, catalog: dict | None = None):
         self.version = version

@@ -2,9 +2,10 @@
 
 **Give it one job description and up to 500 resumes. It returns the top-k candidates, a label for each
 (Good Fit / Potential Fit / No Fit), and plain-English reasons why each one was or wasn't selected.**
+**Candidates can also check one resume against one job and get their skill gaps and concrete suggestions.**
 
-ResumeFit is a hybrid machine-learning resume matcher served as a FastAPI backend. It combines keyword
-similarity (TF-IDF), semantic similarity (BERT sentence embeddings), skill matching and
+ResumeFit is a hybrid machine-learning resume matcher: a FastAPI backend plus a React web app. It combines
+keyword similarity (TF-IDF), semantic similarity (BERT sentence embeddings), skill matching and
 experience parsing, then uses a trained classifier and a learning-to-rank model to sort candidates.
 
 - Dataset: [`cnamuangtoun/resume-job-description-fit`](https://huggingface.co/datasets/cnamuangtoun/resume-job-description-fit)
@@ -12,14 +13,32 @@ experience parsing, then uses a trained classifier and a learning-to-rank model 
 - Default model: `artifacts/pipeline_v3.joblib` (included in this repo, no training needed to run)
 - Input: PDF / DOCX / TXT resume files, or plain text as JSON
 - Output: JSON with ranked candidates, labels, confidence, score breakdown, skill-by-skill evidence and reasons
+- Two modes: **recruiter** (`/rank`: many resumes → shortlist) and **candidate** (`/fit-check`: one resume →
+  fit label, skill gaps, missing keywords, prioritised suggestions)
+- Web app: home page, *Rank candidates*, *Check my resume* and *How it works* pages ([Web frontend](#web-frontend))
+
+### Features
+
+| Feature | For | What it does | API |
+|---|---|---|---|
+| Ranked shortlist with reasons | recruiters | top-k candidates, Good / Potential / No Fit labels, skill-by-skill evidence, plain-English reasons | `/rank`, `/rank/upload` |
+| Adjustable weights | recruiters | your own weights for skills, experience, meaning and keywords (sliders), or the trained AI ranking | `/rerank` ([details](#recruiter-controls-custom-weights-must-have-filters-post-rerank)) |
+| Must-have filters | recruiters | required skills (synonyms and sub-skills understood) and minimum years; failures listed with the reason | `/rerank` |
+| Instant re-ranking | recruiters | resumes are scored once; changing weights or filters re-orders in ~0.3 s without re-uploading | `/rerank` |
+| Resume fit check | job seekers | one resume vs one job: fit label, 0–100 match score, position among similar resumes, skill gap, missing keywords, prioritised suggestions | `/fit-check` ([details](#candidate-mode-post-fit-checkupload-and-post-fit-check)) |
+| Real files | both | PDF / DOCX / TXT resumes; job description as text or a file; candidate names read from the resume | all |
+| Model transparency | both | test metrics, algorithm comparison and ablation served by the API and shown in the app | `/model-info` |
 
 ---
 
 ## Contents
 1. [Quick start](#quick-start)
+   - [Web frontend](#web-frontend)
 2. [How it works](#how-it-works)
 3. [Results](#results)
 4. [API](#api)
+   - [Candidate mode (`/fit-check`)](#candidate-mode-post-fit-checkupload-and-post-fit-check)
+   - [Recruiter controls (weights, filters, `/rerank`)](#recruiter-controls-custom-weights-must-have-filters-post-rerank)
 5. [Example response](#example-response)
 6. [Training and evaluation](#training-and-evaluation)
 7. [Project layout](#project-layout)
@@ -51,6 +70,11 @@ Open **http://localhost:8000/docs** for the interactive Swagger UI, where you ca
 On the first start the BERT model `sentence-transformers/all-MiniLM-L6-v2` (~90 MB) is downloaded once. Later
 starts use the local copy.
 
+> **macOS:** PyTorch and XGBoost each load their own OpenMP runtime, and on a Mac the two deadlock on the
+> first request that needs BERT (the server stays up but never answers). `app/__init__.py` sets
+> `OMP_NUM_THREADS=1` automatically on macOS. If you import the code some other way, run
+> `OMP_NUM_THREADS=1 .venv/bin/uvicorn app.main:app --port 8000`.
+
 > `scikit-learn==1.6.1` is pinned on purpose: the model files were pickled with that version.
 
 ### Try it with demo data
@@ -66,6 +90,43 @@ curl -X POST localhost:8000/rank/upload \
 ```
 
 `true_labels.csv` holds the dataset labels so you can compare them with `result.json`.
+
+### Test PDFs for the web frontend
+
+```bash
+# downloads the dataset from Hugging Face and writes 1 job description + 50 resumes as PDFs
+.venv/bin/python scripts/download_test_data.py            # -> ~/ResumeFit_test_data/job_<n>/
+.venv/bin/python scripts/download_test_data.py --n 30 --job-index 3 --out ~/Desktop/rf_test
+```
+
+By default it picks the test job (never seen in training) with the most even mix of Good / Potential / No Fit
+resumes. The dataset resumes are anonymised, so a made-up name is put on the first line of each PDF so the app
+can show names (`--no-names` to skip). `answer_key.csv` has the dataset label of every resume.
+
+---
+
+### Web frontend
+
+A React (Vite) app in `frontend/` with four pages (hash routes, so it works on any static host):
+
+| Page | Route | What it does |
+|---|---|---|
+| Home | `#/` | What ResumeFit does, the two modes, how it works, features, live test metrics |
+| Rank candidates | `#/recruiter` | JD (text or PDF) + resume PDFs → top-k cards with label, reasons, skill chips, score bars, original PDF viewer. A **Tune the ranking** side panel (AI model vs your weights, 4 weight sliders, must-have skills with suggestions from the job, minimum years, shortlist size) re-ranks instantly via `/rerank`; failed candidates appear under "filtered out" with the reason |
+| Check my resume | `#/candidate` | One resume + a JD → match score gauge, label, position among similar resumes, prioritised suggestions, strengths, score breakdown, skill gap (have / related / missing) and missing job keywords (`/fit-check/upload`) |
+| How it works | `#/how-it-works` | Pipeline diagram, the four signals and the formula, algorithm comparison and ablation tables (from `/model-info`), limitations |
+
+Results stay when you switch pages. Works on phones (collapsing menu, single-column layout). Needs Node 18+.
+
+```bash
+# with the API running on port 8000 (see above), in a second terminal:
+cd frontend
+npm install
+npm run dev            # open http://localhost:5173
+```
+
+The API address defaults to `http://localhost:8000`; to change it, copy `frontend/.env.example` to
+`frontend/.env` and edit `VITE_API_URL`. `npm run build` writes a static site to `frontend/dist/`.
 
 ---
 
@@ -92,8 +153,15 @@ curl -X POST localhost:8000/rank/upload \
  8. Explanations    reasons, per-skill evidence, score breakdown
             │
             ▼
- JSON: top_k[], not_selected[], skipped[], warnings[]
+ JSON: top_k[], not_selected[], filtered_out[], skipped[], warnings[], session_id
+            │
+            ▼
+ 9. Re-rank (/rerank)   new weights / must-have filters / top_k applied to the stored scores: no BERT, ~0.3 s
 ```
+
+**Candidate mode** (`/fit-check`) runs the same pipeline for one resume, scored together with the 24 most
+similar training resumes (so the within-job features stay meaningful), then turns the skill gap, experience
+and missing job keywords into prioritised suggestions.
 
 ### Stage 1 – pairwise models
 The resume vector **r** and job vector **j** are combined as `[r ⊙ j, |r − j|]` (element-wise product and
@@ -118,6 +186,9 @@ Explanations use their own skill rules, separate from the model features:
   "data engineering" ⇒ Airflow, and never Azure ⇒ AWS. Only SQL dialects, NoSQL stores and BI tools give
   partial credit for each other.
 - **No double counting**: if a JD lists "AWS (Redshift, EC2)", AWS isn't counted on top of its services.
+- **Capitalised names survive cleaning**: the cleaner splits "PowerShell" into "Power Shell" (that is what
+  the model was trained on), so the explanation matcher also accepts the split spelling of names like
+  PowerShell, TensorFlow, MySQL, GitHub, DevOps, iOS and B2B (`CASED_NAMES` in `app/ml/skills_catalog.py`).
 
 ---
 
@@ -178,6 +249,9 @@ job #4. `scripts/evaluate.py` therefore also supports **human-labelled** job fol
 |---|---|---|---|
 | POST | `/rank/upload` | multipart form (below) | Rank uploaded resume files |
 | POST | `/rank` | JSON (below) | Rank resumes you already have as text |
+| POST | `/rerank` | JSON | Re-rank the same resumes instantly with new weights / filters / top_k |
+| POST | `/fit-check/upload` | multipart form | Candidate mode: one resume file vs one job |
+| POST | `/fit-check` | JSON | Candidate mode with plain text |
 | GET | `/model-info` | – | Model version, metrics, algorithm comparison, ablation |
 | GET | `/health` | – | Status |
 
@@ -185,11 +259,18 @@ job #4. `scripts/evaluate.py` therefore also supports **human-labelled** job fol
 
 | Field | Type | Default | Notes |
 |---|---|---|---|
-| `job_description` | text | required | the JD as plain text |
+| `job_description` | text | – | the JD as plain text (send this, `jd_file`, or both) |
+| `jd_file` | file | – | the JD as `.pdf`, `.docx` or `.txt` |
 | `files` | file, repeated | required | `.pdf`, `.docx`, `.txt`, `.md`; ≤ 5 MB each; ≤ 500 files |
 | `top_k` | int | 10 | size of the shortlist |
 | `ranking` | `model` \| `formula` | `model` | trained ranker, or the transparent weighted formula |
 | `core_guard` | bool | `true` | cap "Good Fit" → "Potential Fit" when the resume matches 0 of ≥3 core technologies |
+| `weight_skills`, `weight_experience`, `weight_semantic`, `weight_keyword` | number ≥ 0 | 0.40 / 0.25 / 0.20 / 0.15 | custom formula weights (any scale, e.g. slider 0–100; normalised to sum to 1) |
+| `min_years` | number | – | filter: minimum years of experience |
+| `unknown_years` | `keep` \| `exclude` | `keep` | with `min_years`: what to do with resumes where no years were found |
+| `must_have` | text | – | filter: comma-separated skills, e.g. `python, aws, k8s` |
+
+`ranking` defaults to `formula` when any weight is sent, otherwise `model`.
 
 ### `POST /rank` (JSON)
 
@@ -199,9 +280,47 @@ job #4. `scripts/evaluate.py` therefore also supports **human-labelled** job fol
   "resumes": [ {"id": "alice", "text": "..."}, {"id": "bob", "text": "..."} ],
   "top_k": 10,
   "ranking": "model",
-  "core_guard": true
+  "core_guard": true,
+  "weights": {"skills": 50, "experience": 30, "semantic": 20, "keyword": 0},
+  "filters": {"min_years": 3, "unknown_years": "keep", "must_have_skills": ["python", "aws"]}
 }
 ```
+`weights` and `filters` are optional. Every rank response includes a `session_id`.
+
+### Recruiter controls: custom weights, must-have filters, `POST /rerank`
+
+**Weights.** The transparent formula `skills·w1 + experience·w2 + semantic·w3 + keyword·w4` can use the
+recruiter's own weights (any non-negative numbers, normalised to sum to 1). With custom weights the list is
+ordered by this formula unless you ask for `"ranking": "model"`; then the weights only change `formula_score`
+and a warning says so. The trained model stays the default when no weights are sent.
+
+**Filters** decide who may be shortlisted; they never change a score.
+- `min_years`: years found in the resume (stated or from work dates) must be at least this. Resumes with no years
+  found are kept unless `unknown_years: "exclude"`.
+- `must_have_skills`: each must be in the resume. Names go through the skill catalog, so `k8s` = Kubernetes,
+  `PowerShell` = powershell, and a more specific skill counts (`aws` is satisfied by Redshift or EC2). A
+  broader or sibling skill does not (Azure doesn't satisfy AWS). Names not in the catalog (`Go`, `R`) are matched
+  as plain text, with a warning; 1–2-letter names are case-sensitive.
+
+Resumes that fail go to `filtered_out` with the reason first ("Filtered out: missing must-have skills: java").
+Ranks: the resumes that pass are 1…m; filtered-out resumes continue from m+1. Every candidate has
+`passed_filters` and, with skill filters, `must_have: [{skill, found, via, matched_as}]`.
+
+**`POST /rerank`.** Scoring (BERT + model) is the slow part; ordering and filtering are not. Each rank request
+keeps its scored batch in server memory and returns a `session_id`. Send it back with new options and get a
+new ranking with no upload and no re-scoring, so it's fast enough for sliders:
+
+```json
+POST /rerank
+{"session_id": "Xq3...", "top_k": 5, "ranking": "formula",
+ "weights": {"skills": 60, "experience": 20, "semantic": 20, "keyword": 0},
+ "filters": {"min_years": 5, "must_have_skills": ["Java", "AWS"]}}
+```
+
+The response is the same as `/rank`. Measured on 50 PDF resumes: `/rank/upload` 18 s (new resumes, CPU),
+`/rerank` 0.3 s. Sessions are kept for 1 hour after last use, at most 20 at a time
+(`RESUMEFIT_SESSION_TTL`, `RESUMEFIT_SESSIONS`). `404` means the session expired, so rank again (the BERT
+cache makes a repeat quick).
 
 ### From a browser (JavaScript)
 
@@ -213,12 +332,77 @@ form.append("top_k", 10);
 const res = await fetch("http://localhost:8000/rank/upload", { method: "POST", body: form });
 const data = await res.json();
 ```
-A frontend on another origin (e.g. `localhost:5173`) needs `CORSMiddleware` added in `app/main.py`.
+CORS is enabled for `localhost:5173` (Vite) and `localhost:3000` by default. For another frontend URL, set
+`RESUMEFIT_CORS_ORIGINS` (comma-separated), e.g. `RESUMEFIT_CORS_ORIGINS=https://myapp.example.com`.
+
+### Candidate mode: `POST /fit-check/upload` and `POST /fit-check`
+
+"How well does my resume fit this job, and what should I change?" One resume and one job description in;
+a fit label, a 0–100 match score, the resume's position among similar resumes, the skill gap, missing
+keywords, strengths and prioritised suggestions out.
+
+| Field (multipart) | Type | Notes |
+|---|---|---|
+| `resume` | file | `.pdf`, `.docx`, `.txt`; at least 30 words |
+| `job_description` / `jd_file` | text / file | as for `/rank/upload` (one or both) |
+| `core_guard` | bool | as for `/rank/upload` |
+
+JSON version: `{"job_description": "...", "resume_text": "...", "core_guard": true}`.
+
+```bash
+curl -X POST localhost:8000/fit-check/upload \
+  -F "resume=@my_resume.pdf" -F "jd_file=@job_description.pdf"
+```
+
+Response (shortened):
+```json
+{
+  "candidate_name": "Michael Wilson",
+  "label": "No Fit", "confidence": 0.69, "match_score": 33,
+  "headline": "Weak match for this job as the resume stands. Your resume would rank 10th of 25 against the 24 most similar resumes in our database (better than 62% of them).",
+  "comparison": {"pool_size": 24, "rank_in_pool": 10, "percentile": 62.5, "description": "..."},
+  "skills": {"matched": [{"skill": "sql server", "importance": "required", ...}],
+             "related": [{"skill": "cassandra", "status": "related", "via": "mongodb", ...}],
+             "missing": [{"skill": "aws", "importance": "required", "kind": "technology", ...}, ...]},
+  "missing_keywords": ["large scale", "data processing", "cloud", ...],
+  "strengths": ["Has 1 of 9 core technologies: sql server", "Uses much of the job's vocabulary (6th of 25 ...)"],
+  "suggestions": [
+    {"priority": "high", "area": "skills", "text": "Add aws if you have used it: it is a core requirement ..."},
+    {"priority": "medium", "area": "skills", "text": "The job asks for cassandra; your resume shows the related mongodb. If you have used cassandra itself, name it explicitly."},
+    {"priority": "medium", "area": "experience", "text": "The job asks for 8+ years; your resume shows 4. ..."}
+  ],
+  "score_breakdown": {...}, "scores": {...}, "experience": {...}, "job": {...}, "warnings": [], "model": "..."
+}
+```
+
+**How one resume is judged.** The model's stage-2 features compare a resume with the other applicants for the
+same job, so a resume can't be scored meaningfully on its own. `/fit-check` scores it together with a
+**reference pool**: the 24 training-set resumes most similar to the job description (BERT cosine; 24 ≈ the
+average applicant pool in training; `RESUMEFIT_FIT_POOL`). The label, probabilities and position come from that
+comparison. Skill gaps, experience and keywords don't depend on the pool. On 131 unseen test pairs (2 per test
+job) this gives the right label more often than scoring the resume alone:
+
+| One resume scored… | Accuracy | macro-F1 |
+|---|---|---|
+| alone | 0.603 | 0.397 (almost everything → No Fit) |
+| with the reference pool | **0.664** | **0.545** |
+
+Suggestions are rules over the explanation layer, most important first:
+- **high** – missing core technologies; experience required but no years or dates found; label capped by `core_guard`
+- **medium** – related-but-not-exact skills ("name cassandra if you used it"); competencies without evidence;
+  fewer years than required; content less related to the job than most comparable resumes; job wording missing
+  from the resume; very short resume
+- **low** – skills only implied by a more specific one (aws via redshift); missing nice-to-have and soft skills
+
+`missing_keywords` are the job description's highest-weighted TF-IDF terms (words and 2-word phrases) that appear at
+least twice in the job and nowhere in the resume, excluding skills already in the gap list and salary/benefits/
+legal wording.
 
 ### Status codes
 - `200` – ranked. Unreadable files don't fail the request; they are listed in `skipped` with a reason.
 - `413` – more than 500 resumes.
 - `422` – invalid input, or no resume could be read.
+- `404` – `/rerank` session not found or expired.
 
 ### Tips
 - Send **10 or more resumes** per job. Part of the model compares applicants with each other, so a
@@ -243,12 +427,17 @@ Shortened output for test job #4 (Senior Data Engineer, 100 resumes):
   "summary": {
     "total_received": 100, "scored": 100, "skipped": 0, "top_k": 10,
     "label_counts": {"Good Fit": 32, "Potential Fit": 29, "No Fit": 39},
-    "ranked_by": "model", "core_guard": true
+    "ranked_by": "model", "core_guard": true,
+    "weights": {"skills": 0.4, "experience": 0.25, "semantic": 0.2, "keyword": 0.15},
+    "filters": null, "filtered_out": 0
   },
   "top_k": [
     {
       "rank": 1,
       "resume_id": "resume_057.txt",
+      "candidate_name": "resume_057",
+      "name_source": "filename",
+      "upload_index": 56,
       "label": "Good Fit",
       "confidence": 0.6431,
       "probabilities": {"no_fit": 0.0587, "potential_fit": 0.2983, "good_fit": 0.6431},
@@ -271,17 +460,28 @@ Shortened output for test job #4 (Senior Data Engineer, 100 resumes):
   ],
   "not_selected": [ "... same shape, with reasons such as 'Missing core technologies: ...' and 'Overall, ranked below the top 10 by the model score'" ],
   "skipped": [ {"resume_id": "scan.pdf", "reason": "too little text extracted (scanned/image PDF? OCR is not supported yet)"} ],
+  "filtered_out": [],
+  "session_id": "Xq3vB0...",
   "warnings": []
 }
 ```
 
 Field guide:
+- `candidate_name` – taken from the first lines of the resume (a short line of 2–4 capitalised words that
+  is not a heading or job title), else from the file name; `name_source` says which. The dataset resumes are
+  anonymised, so they fall back to the file name.
+- `upload_index` – 0-based position of the resume in the request, so a client can match it to its file.
 - `label`, `confidence`, `probabilities` – stage-2 classifier output.
 - `rank_score` – always the exact score the list is sorted by (`model_score` or `formula_score`).
 - `label_capped` – `true` if `core_guard` lowered the label.
 - `score_breakdown` – skills, experience, semantic and keyword on a 0–1 scale, for display.
 - `skill_details[].status` – `matched`, `related` (partial credit) or `missing`. `via` shows the evidence
   (e.g. AWS matched via Redshift).
+- `summary.weights` – the formula weights used (sum to 1); `summary.filters` / `summary.filtered_out` – active
+  filters and how many resumes failed them.
+- `filtered_out` – candidates that failed a filter, reason first; `passed_filters` and `must_have`
+  (`[{skill, found, via, matched_as}]`) on every candidate when filters are used.
+- `session_id` – send to `POST /rerank` to re-rank the same resumes with new options.
 
 ---
 
@@ -323,7 +523,10 @@ Human-labelled folder format: `job_description.txt`, `resumes/` (PDF/DOCX/TXT), 
 app/
   main.py              FastAPI app and endpoints
   ranker.py            runs the pipeline for one JD + many resumes, builds the response
+  fit_check.py         candidate mode: one resume vs one job, reference pool, gaps, keywords, suggestions
   explain.py           reasons for selected / not-selected resumes
+  filters.py           recruiter must-have filters (min years, must-have skills)
+  sessions.py          in-memory store of scored batches for /rerank
   parsing.py           PDF / DOCX / TXT text extraction
   schemas.py           request / response models (Pydantic)
   config.py            limits and paths (RESUMEFIT_* env vars)
@@ -335,7 +538,8 @@ training/
   train.py             retraining, ablation, model comparison
   train_log*.txt       logs of the training runs behind the numbers above
 scripts/
-  make_samples.py      build a demo job folder from the test split
+  make_samples.py      build a demo job folder (text files) from the test split
+  download_test_data.py  download 1 JD + 50 resumes from Hugging Face as PDFs, for the frontend
   evaluate.py          NDCG@10 / P@10 / R@10 on the dataset or human-labelled folders
 tests/                 regression, feature and API tests
 artifacts/
@@ -344,6 +548,8 @@ artifacts/
   embeddings*.joblib   cached BERT vectors of all dataset texts (fast tests / retraining)
   train_features.parquet, test_features.parquet   dataset texts and labels
   ablation_*.csv, model_comparison*.csv           result tables
+frontend/              React + Vite web app: src/pages/ (Home, Recruiter, Candidate, HowItWorks),
+                       src/components/, src/api.js (all API calls), src/router.js (hash routes)
 resume_job_matcher.py  original Google Colab notebook (export)
 ```
 
@@ -359,6 +565,10 @@ resume_job_matcher.py  original Google Colab notebook (export)
 | `RESUMEFIT_MAX_FILE_MB` | 5 | max size per file |
 | `RESUMEFIT_EMBEDDING_CACHE` | 20000 | number of BERT vectors kept in memory |
 | `RESUMEFIT_LAZY_BERT` | 0 | `1` = load BERT on first request instead of at startup |
+| `RESUMEFIT_CORS_ORIGINS` | `http://localhost:5173,…:3000` | browser origins allowed to call the API (comma-separated) |
+| `RESUMEFIT_SESSIONS` | 20 | scored batches kept in memory for `/rerank` |
+| `RESUMEFIT_SESSION_TTL` | 3600 | seconds a `/rerank` session lives after its last use |
+| `RESUMEFIT_FIT_POOL` | 24 | reference resumes a `/fit-check` resume is compared with |
 
 ---
 
@@ -370,5 +580,14 @@ resume_job_matcher.py  original Google Colab notebook (export)
 - **Noisy labels**: dataset labels are imperfect. Treat the label as a guide and the ranking plus reasons as
   the main output. Use human-labelled jobs to judge quality.
 - **CPU latency**: BERT dominates (~0.2 s per new resume). Use a GPU or background jobs for very large batches.
-- **No CORS / auth yet**: add `CORSMiddleware` for a browser frontend and authentication before exposing it publicly.
-- Resumes are processed in memory and not stored. Only BERT vectors are cached while the server runs.
+- **No authentication or streaming size limits**: upload size is checked after a file is read into memory, and
+  the JSON endpoint has no text-length limit. Fine for a demo; add auth and limits before exposing it publicly.
+- **Small batches in `/rank`**: the relative (within-job) features compare a resume with the rest of its batch,
+  so very small batches are unreliable (one resume alone is labelled No Fit 91% of the time). The API warns
+  below 10 resumes. To judge a single resume, use `/fit-check`, which adds a reference pool.
+- **Candidate-mode pool**: the reference resumes come from the training set (642 resumes, mostly IT, data,
+  healthcare and business). For jobs far from those fields the closest resumes are still loosely related,
+  so the position and label are less meaningful there; the skill gap and suggestions are unaffected.
+- Resumes are processed in memory and not written to disk. BERT vectors are cached, and for `/rerank` the last 20
+  scored batches (including resume text) are kept in memory for up to an hour. Restarting the server clears both.
+- `/rerank` sessions live in one server process; with several workers, use sticky sessions or one worker.

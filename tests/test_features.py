@@ -108,3 +108,11 @@ def test_jd_footer_is_ignored_for_skills():
     assert 'Recruiter' not in strip_jd_footer(jd) and 'Jenkins' in strip_jd_footer(jd)
     early = 'Equal Opportunity Employer is mentioned early. ' + 'Python developer needed. ' * 10
     assert strip_jd_footer(early) == early          # marker in the first half: keep everything
+
+
+def test_explanations_find_capitalised_skill_names(pipe):
+    """Cleaning splits 'PowerShell' -> 'Power Shell'; the explanation layer must still find these skills."""
+    jd = pipe.clean('Required: PowerShell, TensorFlow, GraphQL, MySQL, GitHub, Kubernetes, Docker, iOS, DevOps.')
+    found = set(pipe.jd_importance(jd))
+    assert {'powershell', 'tensorflow', 'graphql', 'mysql', 'git', 'kubernetes', 'docker', 'ios', 'devops'} <= found
+

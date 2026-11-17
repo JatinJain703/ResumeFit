@@ -49,7 +49,9 @@ def test_v3_backend_reproduces_training_metrics(test_df):
     df = p3.score_pairs([p3.clean(t) for t in test_df.resume_text], [p3.clean(t) for t in test_df.job_description_text])
     y = test_df.label.map({l: i for i, l in enumerate(p3.labels)}).values
     pred = df.label.map({l: i for i, l in enumerate(p3.labels)}).values
-    expected = p3.metrics['test']
+    # Hard-coded (not read from the artifact) so a retrained, worse model fails this test.
+    # Values as reported by training/train.py for the shipped pipeline_v3.joblib.
+    expected = {'Accuracy': 0.606, 'F1 (macro)': 0.570, 'NDCG@10': 0.726}
     assert accuracy_score(y, pred) == pytest.approx(expected['Accuracy'], abs=0.001)
     assert f1_score(y, pred, average='macro') == pytest.approx(expected['F1 (macro)'], abs=0.001)
     from training.train import ndcg10

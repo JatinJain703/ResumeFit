@@ -147,7 +147,9 @@ class MatcherPipeline:
         self.skills = self.matcher.skills
         # Explanations always use the v4 catalog + hierarchy + required/preferred weighting,
         # independent of which features the ranking model was trained on.
-        self.explain_matcher = make_matcher({'skills': 4})
+        # It also accepts the cleaned spelling of capitalised names ("PowerShell" -> "power shell").
+        from app.ml.skills_catalog import CASED_NAMES, CATALOG_V4
+        self.explain_matcher = F.SkillMatcher(3, F.with_cleaned_spellings(CATALOG_V4, CASED_NAMES, self.known_words))
         self._jd_imp_cache: dict[str, dict] = {}
         self.feature_names = feature_names(self.cfg)
         assert self.stage2.n_features_in_ == len(self.feature_names), 'artifact / feature mismatch'
@@ -278,25 +280,50 @@ class MatcherPipeline:
         df['missing_skills'] = [[d['skill'] for d in det if d['status'] == 'missing'] for det in df.skill_details]
         return df
 
-    def rank(self, resumes: list[str], job_description: str, ranking: str = 'model',
-             core_guard: bool = True) -> pd.DataFrame:
-        """Clean, score and sort many resumes against one job (best first)."""
+    def score(self, resumes: list[str], job_description: str) -> pd.DataFrame:
+        """Clean and score many resumes against one job (input order, `input_index` = position).
+        This is the expensive part (BERT); `finalize` + `sort_ranked` are cheap and can be re-run."""
         jd = self.clean(job_description)
         res = [self.clean(r) for r in resumes]
-        df = finalize(self.score_pairs(res, [jd] * len(res)), ranking, core_guard)
+        df = self.score_pairs(res, [jd] * len(res))
         df['input_index'] = np.arange(len(df))
-        return df.sort_values('rank_score', ascending=False, kind='stable').reset_index(drop=True)
+        return df
+
+    def rank(self, resumes: list[str], job_description: str, ranking: str = 'model',
+             core_guard: bool = True, weights: dict | None = None) -> pd.DataFrame:
+        """Clean, score and sort many resumes against one job (best first)."""
+        return sort_ranked(finalize(self.score(resumes, job_description), ranking, core_guard, weights))
+
+
+def sort_ranked(df: pd.DataFrame) -> pd.DataFrame:
+    return df.sort_values('rank_score', ascending=False, kind='stable').reset_index(drop=True)
 
 
 FORMULA_WEIGHTS = {'skills': 0.40, 'experience': 0.25, 'semantic': 0.20, 'keyword': 0.15}
 CORE_GUARD_MIN = 3     # JD must list at least this many required technologies for the guard to apply
 
 
-def finalize(df: pd.DataFrame, ranking: str = 'model', core_guard: bool = True) -> pd.DataFrame:
+def normalize_weights(weights: dict | None) -> dict:
+    """Formula weights scaled to sum to 1 (missing keys take the default). Raises ValueError if all are 0."""
+    w = {**FORMULA_WEIGHTS, **{k: float(v) for k, v in (weights or {}).items() if v is not None}}
+    unknown = set(w) - set(FORMULA_WEIGHTS)
+    if unknown:
+        raise ValueError(f'unknown weight(s): {sorted(unknown)}')
+    if any(v < 0 for v in w.values()):
+        raise ValueError('weights must be 0 or more')
+    total = sum(w.values())
+    if total <= 0:
+        raise ValueError('at least one weight must be above 0')
+    return {k: v / total for k, v in w.items()}
+
+
+def finalize(df: pd.DataFrame, ranking: str = 'model', core_guard: bool = True,
+             weights: dict | None = None) -> pd.DataFrame:
     """Add the readable score breakdown, choose the ordering score and apply the core-skill label rule.
 
     ranking='model'   : order by the trained model (best measured NDCG@10 on the test split)
     ranking='formula' : order by 0.40*skills + 0.25*experience + 0.20*semantic + 0.15*keyword
+                        (or custom `weights`, e.g. {'skills': 2, 'experience': 1}: normalised to sum to 1)
     core_guard        : a resume that matches none of the JD's core technologies (when it lists >= 3)
                         is never labelled Good Fit; it is capped at Potential Fit. Ordering is unchanged.
     `rank_score` is always exactly the score the list is sorted by.
@@ -308,7 +335,7 @@ def finalize(df: pd.DataFrame, ranking: str = 'model', core_guard: bool = True) 
     for col, out in (('bert_score', 'semantic_scaled'), ('tfidf_score', 'keyword_scaled')):
         lo, hi = grp[col].transform('min'), grp[col].transform('max')
         df[out] = ((df[col] - lo) / (hi - lo).where(hi > lo)).fillna(1.0)
-    w = FORMULA_WEIGHTS
+    w = normalize_weights(weights)
     df['formula_score'] = (w['skills'] * df.w_skill_score + w['experience'] * df.exp_score +
                            w['semantic'] * df.semantic_scaled + w['keyword'] * df.keyword_scaled)
     df['model_score'] = df['rank_score']

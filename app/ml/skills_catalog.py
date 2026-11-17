@@ -321,3 +321,18 @@ COMPETENCIES = {
     'technical support', 'cloud services', 'electrical engineering', 'mechanical engineering', 'civil engineering',
     'manufacturing', 'construction', 'logistics', 'supply chain', 'inventory management', 'agile',
 }
+
+
+# Skill names as people actually write them. The text cleaner splits lowercase->uppercase and
+# letter/digit boundaries ("PowerShell" -> "Power Shell", "B2B" -> "B2 B"), so the cleaned-text
+# spelling of each of these is added as an extra alias (see features.with_cleaned_spellings).
+# Names whose joined spelling is not in the catalog are ignored.
+CASED_NAMES = (
+    'PowerShell', 'TensorFlow', 'MySQL', 'GitHub', 'GitLab', 'BitBucket', 'DevOps', 'iOS', 'GraphQL',
+    'PostgreSQL', 'JavaScript', 'TypeScript', 'MongoDB', 'NoSQL', 'PyTorch', 'NumPy', 'jQuery', 'DynamoDB',
+    'BigQuery', 'CloudFormation', 'SharePoint', 'PowerPoint', 'QuickBooks', 'ServiceNow', 'OpenShift',
+    'AngularJS', 'NodeJS', 'ReactJS', 'VueJS', 'NextJS', 'ExpressJS', 'ElasticSearch', 'SolidWorks',
+    'AutoCAD', 'PhotoShop', 'HubSpot', 'NetSuite', 'PeopleSoft', 'QlikView', 'PowerBI', 'TestNG',
+    'DataDog', 'RedShift', 'DataBricks', 'SnowFlake', 'AirFlow', 'LoadRunner', 'B2B', 'PySpark', 'PyTest',
+    'J2EE', 'K8s', 'SalesForce', 'SpringBoot', 'DotNet', 'GoLang', 'SciKit-Learn',
+)
